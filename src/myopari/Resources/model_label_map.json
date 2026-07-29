@@ -1,0 +1,17 @@
+{
+  "TIRAMISU_ACDC": {
+    "label_groups": {
+      "right_ventricle": [1],
+      "myocardium": [2],
+      "left_ventricle": [3]
+    }
+  },
+  "TIRAMISU_EMIDEC": {
+    "label_groups": {
+      "cavity": [1],
+      "myocardium": [2, 3, 4],
+      "infarction": [3, 4],
+      "no_reflow": [4]
+    }
+  }
+}

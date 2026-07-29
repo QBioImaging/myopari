@@ -1,32 +1,40 @@
 # myopari
 
-myopari is a napari plugin for cardiac MRI segmentation using ONNX models.
-It provides a dock widget that lets you select an image layer, choose a
-segmentation model, run inference, and visualize the predicted labels directly
-in napari.
+myopari is a napari plugin for cardiac MRI segmentation and report generation.
+It provides an interactive widget to:
 
-## Features
+- select a 2D or 3D image layer,
+- run ONNX-based segmentation,
+- compute basic volumetric metrics,
+- optionally enrich the report with an LLM rewrite,
+- save a markdown report.
 
-- napari dock widget for interactive segmentation
-- Two built-in ONNX segmentation models:
-  - TIRAMISU ACDC
-  - TIRAMISU EMIDEC
-- CPU and CUDA execution provider support through ONNX Runtime
-- Optional myocardium-only output mode
-- Designed for 2D and 3D image layers
+## Main Features
+
+- Napari dock widget for interactive segmentation
+- Built-in segmentation models:
+	- `TIRAMISU_ACDC`
+	- `TIRAMISU_EMIDEC`
+- Works with both 2D images and 3D volumes
+- Optional myocardium-only segmentation mode
+- Markdown report generation with:
+	- per-class volumes (mL)
+	- myocardium mass estimate (g)
+	- optional external patient info files (`.cfg`, `.txt`, `.md`)
+- Optional LLM-based report rewriting (via `llama-cpp-python`)
 
 ## Requirements
 
-- Python 3.9+
+- Python `>=3.9`
 - napari
-- numpy
+- NumPy
 - scikit-image
-- scipy
-- onnxruntime (CPU) or onnxruntime-gpu (CUDA)
+- ONNX Runtime (`onnxruntime` for CPU or `onnxruntime-gpu` for CUDA)
+- llama-cpp-python
 
 ## Installation
 
-### Option 1: Install from source (recommended during development)
+### Install from source (recommended)
 
 ```bash
 git clone <your-repo-url>
@@ -34,50 +42,62 @@ cd myopari
 pip install -e .
 ```
 
-### Option 2: Install with pip
+### Optional: force CPU runtime
+
+If you do not want GPU runtime, install CPU ONNX Runtime explicitly:
 
 ```bash
-pip install myopari
+pip install onnxruntime
 ```
 
-If you want GPU inference, install ONNX Runtime GPU:
+### Optional: enable LLM report rewriting
 
 ```bash
-pip install onnxruntime-gpu
+pip install llama-cpp-python huggingface-hub
 ```
 
-## Usage in napari
+When enabled in the UI, the plugin loads a GGUF model from Hugging Face at runtime.
 
-1. Open napari.
-2. Open your image (2D or 3D stack).
-3. Open the plugin widget:
-	- Plugins -> myopari -> myopari
+## Quick Start in napari
+
+1. Launch napari.
+2. Load a cardiac image (2D or 3D).
+3. Open the widget:
+	 - `Plugins -> myopari -> myopari`
 4. In the widget:
-	- Click Select image layer
-	- Choose Edge device (Jetson Nano or Rasberry Pi)
-	- Choose Segmentation model
-	- Optional: enable Myocardium only
-	- Click Segment
-5. The result is added as a labels layer named `segmentation_<input_layer_name>`.
+	 - Click `Select image layer`
+	 - Choose `Edge device`
+	 - Choose `Segmentation model`
+	 - (Optional) Enable `Myocardium only`
+	 - Click `Segment`
+5. A labels layer is added with a name like:
+	 - `segmentation_<input_layer_name>_<count>`
 
-## Local plugin test
+## Report Workflow
 
-Run the included test launcher:
+After segmentation:
 
-```bash
-python plugin_test.py
-```
+1. (Optional) Click `Choose patient info files` and pick `.cfg`, `.txt`, or `.md` files.
+2. (Optional) Enable `Use LLM for report`.
+3. Click `Create report`.
+4. Click `Save report to .md` to export.
 
-This opens napari and docks the myopari widget.
+Notes:
 
-## Package information
-
-- Package name: `myopari`
-- License: MIT
+- The report includes per-label volumes in mL and myocardium mass estimate.
+- If a logo asset exists in `Resources`, it is embedded in the report and copied next to the saved markdown file.
 
 
-## Notes
+## Troubleshooting
 
-- The plugin bundles ONNX model files under `src/myopari/Resources/`.
-- For best performance with CUDA, ensure your GPU drivers/CUDA stack match your
-  installed `onnxruntime-gpu` version.
+- Segmentation runtime/provider issues:
+	- Check installed ONNX Runtime package (`onnxruntime` vs `onnxruntime-gpu`)
+	- Ensure CUDA and driver versions match your `onnxruntime-gpu` build
+- LLM report generation fails:
+	- Install `llama-cpp-python`
+	- Ensure internet access for first model download
+	- Disable `Use LLM for report` to keep standard report generation
+
+## License
+
+MIT. See `LICENSE`.
