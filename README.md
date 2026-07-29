@@ -31,6 +31,7 @@ It provides an interactive widget to:
 - scikit-image
 - ONNX Runtime (`onnxruntime` for CPU or `onnxruntime-gpu` for CUDA)
 - llama-cpp-python
+- napari-itk-io (optional)
 
 ## Installation
 

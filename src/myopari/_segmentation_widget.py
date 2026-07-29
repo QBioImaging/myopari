@@ -556,12 +556,8 @@ class SegmentationWidget(QTabWidget):
             return base_report_text
 
     def _prepend_logo_to_report(self, report_text):
-        logo_path = self._get_logo_path()
-        if not os.path.exists(logo_path):
-            self._append_report_log(f"Logo file not found, skipping logo embed: {logo_path}")
-            return report_text
-
-        logo_md = f"![QBI Logo]({logo_path})"
+        logo_url = "https://raw.githubusercontent.com/minhnhattrinh312/myopari/refs/heads/main/src/myopari/Resources/qbi_logo.png"
+        logo_md = f"![QBI Logo]({logo_url})"
         if report_text.lstrip().startswith("![QBI Logo]"):
             return report_text
 
