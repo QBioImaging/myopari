@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="myopari",
-    version="0.1.3",
+    version="0.1.4",
     description="User-Friendly AI Software for Automated Quantitative CMR Reporting on Low-Cost, Energy-Efficient Devices",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -32,7 +32,7 @@ setup(
     install_requires=[
         "napari",
         "scikit-image",
-        "llama-cpp-python",
+        # "llama-cpp-python",
         "onnxruntime-gpu[cuda,cudnn]",
         "huggingface-hub",
         "napari-itk-io",
