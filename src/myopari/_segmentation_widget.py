@@ -1,6 +1,5 @@
 # %%
 import os
-import shutil
 import json
 from ._widget import Settings, Combo_box
 from .processors import SEG_module, make_volume
@@ -89,6 +88,7 @@ class SegmentationWidget(QTabWidget):
 
         self.bar_thread_segmentation = BarThread(self)
         self.bar_thread_segmentation.progressChanged.connect(self.progressBar_segmentation.setValue)
+        self.set_tab_style()
 
     def setup_ui_segmentation(self):
         def add_section(_layout, _title):
@@ -301,6 +301,7 @@ class SegmentationWidget(QTabWidget):
             self._append_report_log(f"Segmentation shape: {seg.shape}")
 
             voxel_spacing = self._get_voxel_spacing(source_image_layer, seg, fallback_layer=seg_layer)
+            print("Voxel spacing used for volume calculation:", voxel_spacing)
             model_key = self._get_current_model_key()
             label_groups = self._get_label_groups_for_model(model_key)
 
@@ -495,7 +496,7 @@ class SegmentationWidget(QTabWidget):
             raise RuntimeError("LLM is not loaded.")
 
         prompt = (
-            "Rewrite the provided report into a clear, concise markdown report\n\n"
+            # "Rewrite the provided report into a clear, concise report\n\n"
             "Clinical context: The report is based on cardiac segmentation results. "
             "Input report:\n"
             f"{base_report_text}\n"
@@ -517,7 +518,7 @@ class SegmentationWidget(QTabWidget):
                 messages=messages,
                 stream=True,
                 temperature=0.1,
-                max_tokens=900,
+                max_tokens=2000,
             )
 
             self._append_report_log("LLM output stream:")
@@ -544,7 +545,7 @@ class SegmentationWidget(QTabWidget):
                     messages[1],
                 ],
                 temperature=0.1,
-                max_tokens=900,
+                max_tokens=2000,
             )
             llm_text = response["choices"][0]["message"]["content"].strip()
             if not llm_text:
@@ -565,25 +566,6 @@ class SegmentationWidget(QTabWidget):
 
     def _get_logo_path(self):
         return os.path.join(os.path.dirname(__file__), "Resources", "qbi_logo.png")
-
-    def _prepare_report_for_save(self, report_text, output_file_path):
-        logo_path = self._get_logo_path()
-        if not os.path.exists(logo_path):
-            return report_text
-
-        output_dir = os.path.dirname(output_file_path)
-        logo_filename = os.path.basename(logo_path)
-        logo_target_path = os.path.join(output_dir, logo_filename)
-
-        try:
-            if os.path.abspath(logo_path) != os.path.abspath(logo_target_path):
-                shutil.copy2(logo_path, logo_target_path)
-                self._append_report_log(f"Copied logo next to report: {logo_target_path}")
-        except Exception as exc:
-            self._append_report_log(f"Failed to copy logo next to report: {exc}")
-            return report_text
-
-        return report_text.replace(f"![QBI Logo]({logo_path})", f"![QBI Logo]({logo_filename})")
 
     def save_report_to_md(self):
         if not hasattr(self, "latest_report") or not self.latest_report.strip():
@@ -611,7 +593,7 @@ class SegmentationWidget(QTabWidget):
             file_path = file_path + ".md"
 
         try:
-            report_to_save = self._prepare_report_for_save(self.latest_report, file_path)
+            report_to_save = self.latest_report
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(report_to_save)
                 if not report_to_save.endswith("\n"):
@@ -669,6 +651,8 @@ class SegmentationWidget(QTabWidget):
 
         REPO_ID = "unsloth/gemma-4-E2B-it-GGUF"
         FILENAME = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+        # REPO_ID = "unsloth/medgemma-4b-it-GGUF"
+        # FILENAME = "medgemma-4b-it-UD-Q6_K_XL.gguf"
 
         self._append_report_log("Loading llama.cpp and downloading LLM model if needed...")
         try:
@@ -678,13 +662,53 @@ class SegmentationWidget(QTabWidget):
 
         self.llm = Llama.from_pretrained(
             repo_id=REPO_ID,
-            # filename="gemma-4-E2B-it-UD-Q2_K_XL.gguf",
             filename=FILENAME,
             n_ctx=2048,
-            n_gpu_layers=0,  # CPU only
             verbose=False,
         )
         self._append_report_log(f"LLM ready: {REPO_ID}/{FILENAME}")
+
+    def set_tab_style(self):
+        self.setDocumentMode(True)
+
+        self.tabBar().setStyleSheet("""
+            QTabBar {
+                background: transparent;
+            }
+
+            QTabBar::tab {
+                background-color: #252831;
+                color: #d8d8d8;
+
+                border: 1px solid #3a3d47;
+                border-bottom: none;
+
+                padding: 4px 10px;
+                margin-right: 1px;
+
+                min-width: 70px;
+                min-height: 18px;
+            }
+
+            QTabBar::tab:selected {
+                background-color: #363a45;
+                color: white;
+
+                border-top: 2px solid #8a8f9a;
+            }
+
+            QTabBar::tab:hover:!selected {
+                background-color: #30343e;
+            }
+        """)
+
+        self.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background: transparent;
+                top: -1px;
+            }
+        """)
 
 
 @magic_factory

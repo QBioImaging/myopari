@@ -21,43 +21,14 @@ It provides an interactive widget to:
 	- per-class volumes (mL)
 	- myocardium mass estimate (g)
 	- optional external patient info files (`.cfg`, `.txt`, `.md`)
-- Optional LLM-based report rewriting (via `llama-cpp-python`)
+- Optional LLM-based report rewriting via Ollama
 
-## Requirements
 
-- Python `>=3.9`
-- napari
-- NumPy
-- scikit-image
-- ONNX Runtime (`onnxruntime` for CPU or `onnxruntime-gpu` for CUDA)
-- llama-cpp-python
-- napari-itk-io (optional)
-
-## Installation
-
-### Install from source (recommended)
+## Installation with pip
 
 ```bash
-git clone <your-repo-url>
-cd myopari
-pip install -e .
+pip install myopari
 ```
-
-### Optional: force CPU runtime
-
-If you do not want GPU runtime, install CPU ONNX Runtime explicitly:
-
-```bash
-pip install onnxruntime
-```
-
-### Optional: enable LLM report rewriting
-
-```bash
-pip install llama-cpp-python huggingface-hub
-```
-
-When enabled in the UI, the plugin loads a GGUF model from Hugging Face at runtime.
 
 ## Quick Start in napari
 
@@ -95,8 +66,9 @@ Notes:
 	- Check installed ONNX Runtime package (`onnxruntime` vs `onnxruntime-gpu`)
 	- Ensure CUDA and driver versions match your `onnxruntime-gpu` build
 - LLM report generation fails:
-	- Install `llama-cpp-python`
-	- Ensure internet access for first model download
+	- Install Ollama and start the local server: `ollama serve`
+	- Pull a model such as `ollama pull llama3.2`
+	- Set `MYOPARI_OLLAMA_MODEL` to a different model if needed
 	- Disable `Use LLM for report` to keep standard report generation
 
 ## License

@@ -1,0 +1,3 @@
+include src/myopari/napari.yaml
+graft src/myopari/Resources
+recursive-include src/myopari/Resources *

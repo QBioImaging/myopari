@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="myopari",
-    version="0.1.1",
+    version="0.1.3",
     description="User-Friendly AI Software for Automated Quantitative CMR Reporting on Low-Cost, Energy-Efficient Devices",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -29,7 +29,14 @@ setup(
         "Topic :: Scientific/Engineering :: Image Processing",
     ],
     python_requires=">=3.9",
-    install_requires=["napari", "scikit-image", "enum", "onnxruntime-gpu", "llama-cpp-python", "napari-itk-io"],
+    install_requires=[
+        "napari",
+        "scikit-image",
+        "llama-cpp-python",
+        "onnxruntime-gpu[cuda,cudnn]",
+        "huggingface-hub",
+        "napari-itk-io",
+    ],
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     include_package_data=True,
@@ -38,5 +45,11 @@ setup(
             "myopari = myopari:napari.yaml",
         ]
     },
-    package_data={"": ["*.yaml"], "myopari.Resources": ["*"]},
+    package_data={
+        "myopari": [
+            "napari.yaml",
+            "Resources/*",
+            "Resources/**/*",
+        ]
+    },
 )

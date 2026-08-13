@@ -1,28 +1,36 @@
 # import torch
 import onnxruntime as ort
 
-# import the FCDenseNet model
-# from .tiramisu_model import FCDenseNet
+ort.preload_dlls(directory="")
+
+print(ort.get_available_providers())
+
 import os
+
 # import the functions_utils module
 from .functions_utils import *
 
 from enum import Enum
 
+
 class SegModel(Enum):
     """Supported reconstruction modes."""
+
     TIRAMISU_ACDC = 0
     TIRAMISU_EMIDEC = 1
+
 
 class EdgeDevice(Enum):
     JETSON_NANO = 0
     RASBERRY_PI = 1
 
-class SEG_module():
+
+class SEG_module:
     def __init__(self):
         self.model_name = SegModel.TIRAMISU_ACDC.value
         self.myo_only = False
         self.edge_device = EdgeDevice.JETSON_NANO.value
+
     def segment(self, volume):
         # volume have shape (H, W, D)
         if self.model_name == SegModel.TIRAMISU_ACDC.value:
@@ -59,17 +67,25 @@ class SEG_module():
         data = preprocess_data_array(volume)
         if self.model_name == SegModel.TIRAMISU_ACDC.value:
             num_class = 4
-            seg_array = predict_data_model(data, self.model, num_classes=num_class, min_size_remove=800, 
-                                           fp16=self.fp16, device=self.device, onnx=self.onnx).astype(np.uint8)
+            seg_array = predict_data_model(
+                data,
+                self.model,
+                num_classes=num_class,
+                min_size_remove=800,
+                fp16=self.fp16,
+                device=self.device,
+                onnx=self.onnx,
+            ).astype(np.uint8)
             if self.myo_only:
                 seg_array[seg_array != 2] = 0
             return seg_array
         elif self.model_name == SegModel.TIRAMISU_EMIDEC.value:
             num_class = 5
-            seg_array = predict_data_model_emidec(data, self.model, fp16=self.fp16, device=self.device, onnx=self.onnx).astype(np.uint8)
+            seg_array = predict_data_model_emidec(
+                data, self.model, fp16=self.fp16, device=self.device, onnx=self.onnx
+            ).astype(np.uint8)
             if self.myo_only:
                 seg_array[seg_array == 1] = 0
                 seg_array[seg_array >= 2] = 2
 
             return seg_array
-
