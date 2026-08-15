@@ -221,7 +221,7 @@ class SegmentationWidget(QTabWidget):
             if not hasattr(self, "h_segmentation"):
                 self.start_segmentation_processor()
             print(f"Selected image layer: {image.name}")
-        else:
+        elif image.data.ndim == 2:
             self.input_type = "2D"
             self.image_data = {
                 "name": image.name,
@@ -236,6 +236,23 @@ class SegmentationWidget(QTabWidget):
             if not hasattr(self, "h_segmentation"):
                 self.start_segmentation_processor()
             print(f"Selected image layer: {image.name}")
+        elif image.data.ndim == 4:
+            self.input_type = "4D"
+            self.image_data = {
+                "name": image.name,
+                "shape": image.data.shape,
+                "scale": image.scale,
+                "affine": image.affine,
+                "metadata": image.metadata,
+                "translate": image.translate,
+            }
+            sz, sy, sx, st = image.data.shape
+            print(sz, sy, sx, st)
+            if not hasattr(self, "h_segmentation"):
+                self.start_segmentation_processor()
+            print(f"Selected image layer: {image.name}")
+        else:
+            print(f"Unsupported image shape: {image.data.shape}. Please select a 2D, 3D, or 4D image layer.")
 
     def volume_segmentation(self):
 
@@ -253,23 +270,84 @@ class SegmentationWidget(QTabWidget):
             connect={"returned": update_segmentation_image},
         )
         def _segmentation():
-            print("myocardium only: ", self.h_segmentation.myo_only)
             volume = self.get_image()
             if self.input_type == "2D":
-                # add a new axis to the volume to make it 3D
-                volume = volume[np.newaxis, :, :]
-            # tranpose the volume from (D, H, W) to (H, W, D)
-            volume_transposed = volume.transpose(2, 1, 0)
+                # add a new axis to the volume to make it 4D
+                volume = volume[np.newaxis, np.newaxis :, :]
+            elif self.input_type == "3D":
+                # add a new axis to the volume to make it 4D
+                volume = volume[np.newaxis, :, :, :]
+            seg_array = np.zeros_like(volume, dtype=np.uint8)
+            for timepoint in range(volume.shape[0]):
+                volume_tp = volume[timepoint, :, :, :]
+                volume_transposed = volume_tp.transpose(2, 1, 0)
+                seg = self.h_segmentation.segment(volume_transposed)
 
-            seg = self.h_segmentation.segment(volume_transposed)
-            seg = seg.transpose(2, 1, 0)
-
-            return seg
+                seg = seg.transpose(2, 1, 0)
+                seg_array[timepoint, :, :, :] = seg
+            # make seg_array be the same shape as the input volume
+            if self.input_type == "2D":
+                seg_array = seg_array[0, 0, :, :]
+            elif self.input_type == "3D":
+                seg_array = seg_array[0, :, :, :]
+            elif self.input_type == "4D":
+                seg_array = seg_array
+            return seg_array
 
         time_start = time()
         _segmentation()
         # calculate the time taken for segmentation in seconds
         print(f"Segmentation time: {time() - time_start:.4f} seconds")
+
+    def _compute_4d_segmentation_summary(self, seg_array, voxel_spacing, model_key=None):
+        if model_key is None:
+            model_key = self._get_current_model_key()
+
+        frames = seg_array
+        if isinstance(frames, np.ndarray) and frames.ndim == 3:
+            frames = frames[np.newaxis, :, :, :]
+
+        if not isinstance(frames, np.ndarray) or frames.ndim < 4:
+            return {}
+
+        label_groups = self._get_label_groups_for_model(model_key)
+        lv_label_ids = label_groups.get("left_ventricle")
+        if not lv_label_ids:
+            return {}
+
+        # Use LV volume alone to identify the cardiac phase indices.
+        lv_volumes_ml = [float(make_volume(np.isin(frame, lv_label_ids), voxel_spacing) / 1000.0) for frame in frames]
+        if not any(lv_volumes_ml):
+            return {}
+
+        ed_index = int(np.argmax(lv_volumes_ml))
+        es_index = int(np.argmin(lv_volumes_ml))
+        print(f"Identified ED index: {ed_index}, ES index: {es_index} based on LV volumes.")
+        # Apply the LV-derived ED/ES indices to every structure. In particular,
+        # RV EF and myocardial mass are calculated at the same cardiac phases.
+        summary = {}
+        for label_name, label_ids in label_groups.items():
+            frame_volumes_ml = [
+                float(make_volume(np.isin(frame, label_ids), voxel_spacing) / 1000.0) for frame in frames
+            ]
+            ed_volume = frame_volumes_ml[ed_index]
+            es_volume = frame_volumes_ml[es_index]
+            summary[label_name] = {
+                "ED": round(ed_volume, 2),
+                "ES": round(es_volume, 2),
+                "ED_index": ed_index,
+                "ES_index": es_index,
+                "volumes_ml": [round(v, 2) for v in frame_volumes_ml],
+            }
+            if label_name in {"left_ventricle", "right_ventricle"}:
+                summary[label_name]["EF"] = (
+                    round((ed_volume - es_volume) / ed_volume * 100.0, 2) if ed_volume > 0 else 0.0
+                )
+            elif label_name == "myocardium":
+                summary[label_name]["mass_ED"] = round(ed_volume * 1.05, 2)
+                summary[label_name]["mass_ES"] = round(es_volume * 1.05, 2)
+
+        return summary
 
     def create_report(self):
         if hasattr(self, "report_chat_box"):
@@ -305,11 +383,17 @@ class SegmentationWidget(QTabWidget):
             model_key = self._get_current_model_key()
             label_groups = self._get_label_groups_for_model(model_key)
 
-            class_volumes_ml = {}
-            for label_name, label_ids in label_groups.items():
-                mask = np.isin(seg, label_ids)
-                vol_ml = round(make_volume(mask, voxel_spacing) / 1000, 2)
-                class_volumes_ml[label_name] = vol_ml
+            if isinstance(seg, np.ndarray) and seg.ndim == 4:
+                summary = self._compute_4d_segmentation_summary(seg, voxel_spacing, model_key=model_key)
+                class_volumes_ml = {label_name: stats["ED"] for label_name, stats in summary.items()}
+                self.latest_segmentation_summary = summary
+            else:
+                class_volumes_ml = {}
+                for label_name, label_ids in label_groups.items():
+                    mask = np.isin(seg, label_ids)
+                    vol_ml = round(make_volume(mask, voxel_spacing) / 1000, 2)
+                    class_volumes_ml[label_name] = vol_ml
+                self.latest_segmentation_summary = None
 
             lines = []
             lines.append("=== Myopari Segmentation Report ===")
@@ -321,16 +405,45 @@ class SegmentationWidget(QTabWidget):
             if self.myo_only.val:
                 lines.append("Myocardium only: True")
             lines.append("")
+            if isinstance(seg, np.ndarray) and seg.ndim == 4:
+                lines.append("Abbreviations: ED = end-diastole; ES = end-systole; " "EF = ejection fraction.")
+                lines.append("")
             lines.append("Segmentation information (volume in mL):")
-            if class_volumes_ml:
+            if isinstance(seg, np.ndarray) and seg.ndim == 4 and self.latest_segmentation_summary:
+                for label_name in ["right_ventricle", "myocardium", "left_ventricle"]:
+                    stats = self.latest_segmentation_summary.get(label_name)
+                    if stats is None:
+                        continue
+                    measurement = f"  {label_name}: ED={stats['ED']} mL, ES={stats['ES']} mL"
+                    if "EF" in stats:
+                        measurement += f", EF={stats['EF']}%"
+                    lines.append(measurement)
+            elif class_volumes_ml:
                 for class_name, class_volume in class_volumes_ml.items():
                     lines.append(f"  {class_name}: {class_volume} mL")
             else:
                 lines.append("No non-background segmentation classes found.")
 
-            myocardium_volume_ed = class_volumes_ml.get("myocardium", 0.0)
-            myocardium_mass_ed = round(myocardium_volume_ed * 1.05, 2)
-            lines.append(f"Myocardium mass: {myocardium_mass_ed} g")
+            if not (isinstance(seg, np.ndarray) and seg.ndim == 4):
+                myocardium_volume = class_volumes_ml.get("myocardium", 0.0)
+                myocardium_mass = round(myocardium_volume * 1.05, 2)
+                lines.append(f"Myocardium mass: {myocardium_mass} g")
+
+            if isinstance(seg, np.ndarray) and seg.ndim == 4 and self.latest_segmentation_summary:
+                myocardium_stats = self.latest_segmentation_summary.get("myocardium", {})
+                lines.append(f"Myocardium ED volume: {myocardium_stats.get('ED', 0.0)} mL")
+                lines.append(f"Myocardium ES volume: {myocardium_stats.get('ES', 0.0)} mL")
+                lines.append(f"Myocardium ED mass: {myocardium_stats.get('mass_ED', 0.0)} g")
+                lines.append(f"Myocardium ES mass: {myocardium_stats.get('mass_ES', 0.0)} g")
+
+                rv_stats = self.latest_segmentation_summary.get("right_ventricle", {})
+                lv_stats = self.latest_segmentation_summary.get("left_ventricle", {})
+                lines.append(f"Right ventricle ED volume: {rv_stats.get('ED', 0.0)} mL")
+                lines.append(f"Right ventricle ES volume: {rv_stats.get('ES', 0.0)} mL")
+                lines.append(f"Right ventricle EF: {rv_stats.get('EF', 0.0)} %")
+                lines.append(f"Left ventricle ED volume: {lv_stats.get('ED', 0.0)} mL")
+                lines.append(f"Left ventricle ES volume: {lv_stats.get('ES', 0.0)} mL")
+                lines.append(f"Left ventricle EF: {lv_stats.get('EF', 0.0)} %")
 
             if self.external_info_files:
                 lines.append("")
@@ -471,7 +584,11 @@ class SegmentationWidget(QTabWidget):
             return ""
 
     def _get_label_groups_for_model(self, model_key):
-        model_entry = self.model_label_map.get(model_key, {})
+        model_label_map = getattr(self, "model_label_map", None)
+        if model_label_map is None:
+            model_label_map = self._load_model_label_map()
+
+        model_entry = model_label_map.get(model_key, {}) if isinstance(model_label_map, dict) else {}
         label_groups = model_entry.get("label_groups", {}) if isinstance(model_entry, dict) else {}
 
         if isinstance(label_groups, dict) and label_groups:
@@ -495,21 +612,47 @@ class SegmentationWidget(QTabWidget):
         if self.llm is None:
             raise RuntimeError("LLM is not loaded.")
 
-        prompt = (
-            # "Rewrite the provided report into a clear, concise report\n\n"
-            "Clinical context: The report is based on cardiac segmentation results. "
-            "Input report:\n"
-            f"{base_report_text}\n"
-        )
+        prompt = f"""
+        Input report:
+        {base_report_text}
+
+        Please generate a structured Markdown report (no latex equations) with the following sections:
+
+        ## Cardiac Segmentation Report
+
+        ### Clinical Information
+        Provide a concise summary of available patient information
+
+        ### Summary of Findings
+        #### Segmentation Results
+        Present quantitative measurements in a table, including:
+        - Cardiac structure
+        - Volume (mL)
+        - Mass (g), when available
+        #### Cardiac Status
+
+        **1. Structural Assessment:**
+        Summarize quantitative cardiac measurements, including ventricular volumes, myocardial mass, and other structural findings derived from segmentation.
+
+        **2. Risk Factors and Clinical Context:**
+        Summarize available clinical risk factors and biomarkers without making diagnostic conclusions.
+
+        **3. Infarction and Tissue Characterization:**
+        Describe the presence and quantitative measurements of myocardial infarction, microvascular obstruction/no-reflow, or other tissue abnormalities based only on segmentation results.
+        """
 
         try:
             messages = [
                 {
                     "role": "system",
                     "content": (
-                        "You are a medical reporting assistant for cardiac segmentation. "
-                        "Generate a structured markdown report with sections: Summary, Patient Information,"
-                        "Segmentation Information, Clinical diagnosis."
+                        """
+        You are a clinical report generation assistant for cardiac MRI (CMR) analysis.
+
+        The report is generated from automated cardiac segmentation results and available clinical information.
+        Your task is to create a structured and clinically interpretable summary of the quantitative findings.
+        Do not make a medical diagnosis or replace expert interpretation. Only summarize the provided information and explain the clinical relevance of the measurements.
+        """
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -517,8 +660,8 @@ class SegmentationWidget(QTabWidget):
             stream = self.llm.create_chat_completion(
                 messages=messages,
                 stream=True,
-                temperature=0.1,
-                max_tokens=2000,
+                temperature=0.15,
+                max_tokens=10000,
             )
 
             self._append_report_log("LLM output stream:")
@@ -559,13 +702,11 @@ class SegmentationWidget(QTabWidget):
     def _prepend_logo_to_report(self, report_text):
         logo_url = "https://raw.githubusercontent.com/minhnhattrinh312/myopari/refs/heads/main/src/myopari/Resources/qbi_logo.png"
         logo_md = f"![QBI Logo]({logo_url})"
+        lab_line = "[Quantitative Bio-Imaging Lab, CCMAR](https://qbioimaging.github.io)"
         if report_text.lstrip().startswith("![QBI Logo]"):
             return report_text
 
-        return f"{logo_md}\n\n{report_text}"
-
-    def _get_logo_path(self):
-        return os.path.join(os.path.dirname(__file__), "Resources", "qbi_logo.png")
+        return f"{logo_md}\n\n{lab_line}\n\n{report_text}"
 
     def save_report_to_md(self):
         if not hasattr(self, "latest_report") or not self.latest_report.strip():
@@ -715,3 +856,6 @@ class SegmentationWidget(QTabWidget):
 def choose_layer(image: Image):
     """Layer-selection helper used by magicgui."""
     pass  # TODO: substitute with a qtwidget without magic functions
+
+
+# %%
