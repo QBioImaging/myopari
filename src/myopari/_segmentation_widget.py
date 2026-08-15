@@ -299,56 +299,6 @@ class SegmentationWidget(QTabWidget):
         # calculate the time taken for segmentation in seconds
         print(f"Segmentation time: {time() - time_start:.4f} seconds")
 
-    def _compute_4d_segmentation_summary(self, seg_array, voxel_spacing, model_key=None):
-        if model_key is None:
-            model_key = self._get_current_model_key()
-
-        frames = seg_array
-        if isinstance(frames, np.ndarray) and frames.ndim == 3:
-            frames = frames[np.newaxis, :, :, :]
-
-        if not isinstance(frames, np.ndarray) or frames.ndim < 4:
-            return {}
-
-        label_groups = self._get_label_groups_for_model(model_key)
-        lv_label_ids = label_groups.get("left_ventricle")
-        if not lv_label_ids:
-            return {}
-
-        # Use LV volume alone to identify the cardiac phase indices.
-        lv_volumes_ml = [float(make_volume(np.isin(frame, lv_label_ids), voxel_spacing) / 1000.0) for frame in frames]
-        if not any(lv_volumes_ml):
-            return {}
-
-        ed_index = int(np.argmax(lv_volumes_ml))
-        es_index = int(np.argmin(lv_volumes_ml))
-        print(f"Identified ED index: {ed_index}, ES index: {es_index} based on LV volumes.")
-        # Apply the LV-derived ED/ES indices to every structure. In particular,
-        # RV EF and myocardial mass are calculated at the same cardiac phases.
-        summary = {}
-        for label_name, label_ids in label_groups.items():
-            frame_volumes_ml = [
-                float(make_volume(np.isin(frame, label_ids), voxel_spacing) / 1000.0) for frame in frames
-            ]
-            ed_volume = frame_volumes_ml[ed_index]
-            es_volume = frame_volumes_ml[es_index]
-            summary[label_name] = {
-                "ED": round(ed_volume, 2),
-                "ES": round(es_volume, 2),
-                "ED_index": ed_index,
-                "ES_index": es_index,
-                "volumes_ml": [round(v, 2) for v in frame_volumes_ml],
-            }
-            if label_name in {"left_ventricle", "right_ventricle"}:
-                summary[label_name]["EF"] = (
-                    round((ed_volume - es_volume) / ed_volume * 100.0, 2) if ed_volume > 0 else 0.0
-                )
-            elif label_name == "myocardium":
-                summary[label_name]["mass_ED"] = round(ed_volume * 1.05, 2)
-                summary[label_name]["mass_ES"] = round(es_volume * 1.05, 2)
-
-        return summary
-
     def create_report(self):
         if hasattr(self, "report_chat_box"):
             self.report_chat_box.clear()
@@ -424,8 +374,19 @@ class SegmentationWidget(QTabWidget):
             else:
                 lines.append("No non-background segmentation classes found.")
 
+            myocardium_volume = class_volumes_ml.get("myocardium", 0.0)
+            if myocardium_volume > 0:
+                if "infarction" in class_volumes_ml:
+                    infarction_volume = class_volumes_ml["infarction"]
+                    infarction_ratio = round(infarction_volume / myocardium_volume * 100, 2)
+                    lines.append(f"Fraction of myocardium infarcted: {infarction_ratio}%")
+
+                if "no_reflow" in class_volumes_ml:
+                    no_reflow_volume = class_volumes_ml["no_reflow"]
+                    no_reflow_ratio = round(no_reflow_volume / myocardium_volume * 100, 2)
+                    lines.append(f"Fraction of myocardium with no-reflow: {no_reflow_ratio}%")
+
             if not (isinstance(seg, np.ndarray) and seg.ndim == 4):
-                myocardium_volume = class_volumes_ml.get("myocardium", 0.0)
                 myocardium_mass = round(myocardium_volume * 1.05, 2)
                 lines.append(f"Myocardium mass: {myocardium_mass} g")
 
@@ -576,12 +537,6 @@ class SegmentationWidget(QTabWidget):
             return {}
         except Exception:
             return {}
-
-    def _get_current_model_key(self):
-        try:
-            return SegModel(self.segmentation_model.val).name
-        except Exception:
-            return ""
 
     def _get_label_groups_for_model(self, model_key):
         model_label_map = getattr(self, "model_label_map", None)
@@ -808,6 +763,62 @@ class SegmentationWidget(QTabWidget):
             verbose=False,
         )
         self._append_report_log(f"LLM ready: {REPO_ID}/{FILENAME}")
+
+    def _get_current_model_key(self):
+        try:
+            return SegModel(self.segmentation_model.val).name
+        except Exception:
+            return ""
+
+    def _compute_4d_segmentation_summary(self, seg_array, voxel_spacing, model_key=None):
+        if model_key is None:
+            model_key = self._get_current_model_key()
+
+        frames = seg_array
+        if isinstance(frames, np.ndarray) and frames.ndim == 3:
+            frames = frames[np.newaxis, :, :, :]
+
+        if not isinstance(frames, np.ndarray) or frames.ndim < 4:
+            return {}
+
+        label_groups = self._get_label_groups_for_model(model_key)
+        lv_label_ids = label_groups.get("left_ventricle")
+        if not lv_label_ids:
+            return {}
+
+        # Use LV volume alone to identify the cardiac phase indices.
+        lv_volumes_ml = [float(make_volume(np.isin(frame, lv_label_ids), voxel_spacing) / 1000.0) for frame in frames]
+        if not any(lv_volumes_ml):
+            return {}
+
+        ed_index = int(np.argmax(lv_volumes_ml))
+        es_index = int(np.argmin(lv_volumes_ml))
+        print(f"Identified ED index: {ed_index}, ES index: {es_index} based on LV volumes.")
+        # Apply the LV-derived ED/ES indices to every structure. In particular,
+        # RV EF and myocardial mass are calculated at the same cardiac phases.
+        summary = {}
+        for label_name, label_ids in label_groups.items():
+            frame_volumes_ml = [
+                float(make_volume(np.isin(frame, label_ids), voxel_spacing) / 1000.0) for frame in frames
+            ]
+            ed_volume = frame_volumes_ml[ed_index]
+            es_volume = frame_volumes_ml[es_index]
+            summary[label_name] = {
+                "ED": round(ed_volume, 2),
+                "ES": round(es_volume, 2),
+                "ED_index": ed_index,
+                "ES_index": es_index,
+                "volumes_ml": [round(v, 2) for v in frame_volumes_ml],
+            }
+            if label_name in {"left_ventricle", "right_ventricle"}:
+                summary[label_name]["EF"] = (
+                    round((ed_volume - es_volume) / ed_volume * 100.0, 2) if ed_volume > 0 else 0.0
+                )
+            elif label_name == "myocardium":
+                summary[label_name]["mass_ED"] = round(ed_volume * 1.05, 2)
+                summary[label_name]["mass_ES"] = round(es_volume * 1.05, 2)
+
+        return summary
 
     def set_tab_style(self):
         self.setDocumentMode(True)
