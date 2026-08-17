@@ -574,8 +574,8 @@ class SegmentationWidget(QTabWidget):
         Please generate a structured Markdown report (no latex equations) with the following sections:
 
         ## Cardiac Segmentation Report
-
         ### Clinical Information
+        (Do not include imaging data in this section.)
         Provide a concise summary of available patient information
 
         ### Summary of Findings
@@ -584,30 +584,28 @@ class SegmentationWidget(QTabWidget):
         - Cardiac structure
         - Volume (mL)
         - Mass (g), when available
-        #### Cardiac Status
-
-        **1. Structural Assessment:**
-        Summarize quantitative cardiac measurements, including ventricular volumes, myocardial mass, and other structural findings derived from segmentation.
-
-        **2. Risk Factors and Clinical Context:**
-        Summarize available clinical risk factors and biomarkers without making diagnostic conclusions.
-
-        **3. Infarction and Tissue Characterization:**
-        Describe the presence and quantitative measurements of myocardial infarction, microvascular obstruction/no-reflow, or other tissue abnormalities based only on segmentation results.
+        #### Clinical Interpretation
+        Analyze the segmentation results and provide insights into the patient's cardiac health
+        (e.g., EF, infarction, no-reflow, etc.), and provide potential clinical implications.
+        -Cardiac Status
+        -Structural Assessment
+        -Risk Factors
+        -Infarction Status
         """
+        # Interpret the findings in a clinical context, highlighting any abnormalities or notable observations.
 
+        #         (analysis of segmentation results without relying on external patient information)
         try:
             messages = [
                 {
                     "role": "system",
                     "content": (
                         """
-        You are a clinical report generation assistant for cardiac MRI (CMR) analysis.
+                    You are a medical doctor.
 
-        The report is generated from automated cardiac segmentation results and available clinical information.
-        Your task is to create a structured and clinically interpretable summary of the quantitative findings.
-        Do not make a medical diagnosis or replace expert interpretation. Only summarize the provided information and explain the clinical relevance of the measurements.
-        """
+                    The report is generated from automated cardiac segmentation results and available clinical information.
+                    Your task is to create a structured and clinically interpret the quantitative findings.
+                    """
                     ),
                 },
                 {"role": "user", "content": prompt},

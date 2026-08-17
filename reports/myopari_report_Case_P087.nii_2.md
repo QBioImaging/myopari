@@ -5,9 +5,23 @@
 ## Cardiac Segmentation Report
 
 ### Clinical Information
-The patient is a 62-year-old female with a history of arterial hypertension and a positive ECG (ST+). She has a Troponin level of 5.2 and a NTProBNP level of 2989. She is a current smoker (3 packs per day) and is overweight. She does not have a family history of coronary artery disease or diabetes.
+| Parameter | Value |
+| :--- | :--- |
+| Sex | Female |
+| Age | 62 years |
+| Tobacco Use | 3 (Pack-years/history not specified) |
+| Overweight | No |
+| Arterial Hypertension | Yes |
+| Diabetes | No |
+| Family History of CAD | No |
+| ECG | ST+ |
+| Troponin | 5.2 |
+| Killip Class | 1 |
+| LVEF (FEVG) | 47% |
+| NT-proBNP | 2989 pg/mL |
 
 ### Summary of Findings
+
 #### Segmentation Results
 
 | Cardiac Structure | Volume (mL) | Mass (g) |
@@ -15,15 +29,23 @@ The patient is a 62-year-old female with a history of arterial hypertension and 
 | Cavity | 66.82 | N/A |
 | Myocardium | 74.56 | 78.29 |
 | Infarction | 2.59 | N/A |
-| No-reflow | 0.0 | N/A |
+| No-Reflow | 0.0 | N/A |
+| Fraction of Myocardium Infarcted | 3.47% | N/A |
+| Fraction of Myocardium with No-Reflow | 0.0% | N/A |
 
-#### Cardiac Status
+#### Clinical Interpretation
 
-**1. Structural Assessment:**
-The segmentation analysis yielded a cavity volume of 66.82 mL and a myocardium volume of 74.56 mL, with a total myocardium mass of 78.29 g.
+**Cardiac Status:**
+The patient presents with evidence of cardiac strain, supported by an elevated NT-proBNP level (2989 pg/mL), which suggests elevated ventricular filling pressures or myocardial stretch. The Left Ventricular Ejection Fraction (LVEF) is reported as 47%, which falls into the mildly reduced to borderline range, indicating some degree of systolic dysfunction.
 
-**2. Risk Factors and Clinical Context:**
-The patient presents with known risk factors including arterial hypertension and a history of smoking. Biomarker results include a Troponin level of 5.2 and a NTProBNP level of 2989.
+**Structural Assessment:**
+The segmentation analysis shows a measurable myocardial mass (78.29 g) and a defined cavity volume (66.82 mL). Crucially, the analysis indicates a low burden of acute myocardial injury, with only 3.47% of the myocardium identified as infarcted. There is no evidence of significant no-reflow phenomena (0.0%).
 
-**3. Infarction and Tissue Characterization:**
-The segmentation identified a myocardial infarction volume of 2.59 mL. The analysis indicates that the fraction of myocardium infarcted is 3.47%, and the fraction of myocardium with no-reflow is 0.0%.
+**Risk Factors:**
+The patient has a significant cardiovascular risk profile, primarily due to the presence of Arterial Hypertension and a history of tobacco use.
+
+**Infarction Status:**
+The presence of a small area of infarction (2.59 mL) is noted. Given the elevated Troponin level (5.2), this finding warrants further clinical correlation. The low fraction of infarcted myocardium suggests that the current findings are not indicative of a massive acute infarction, but rather a small, localized area of injury.
+
+**Clinical Implications:**
+The combination of mild systolic dysfunction (LVEF 47%), elevated biomarkers (NT-proBNP), and underlying hypertension places this patient at increased risk for adverse cardiac events. Further clinical evaluation, including assessment of symptoms, coronary artery disease status, and management of hypertension, is recommended. The imaging findings provide structural context to the functional and biomarker data.
